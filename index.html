@@ -379,7 +379,8 @@ async function fetchCloudRows() {
 }
 async function replaceCloudRows(dateStr,type,rows) {
   const clean = v => parseInt(String(v).replace(/[+,]/g, '')) || 0;
-st delUrl = APP_CONFIG.supabaseUrl + '/rest/v1/slot_daily_records?date=eq.' + encodeURIComponent(dateStr) + '&machine_type=eq.' + encodeURIComponent(type);
+
+  const delUrl = APP_CONFIG.supabaseUrl + '/rest/v1/slot_daily_records?date=eq.' + encodeURIComponent(dateStr) + '&machine_type=eq.' + encodeURIComponent(type);
   const delRes = await fetch(delUrl, { method:'DELETE', headers:Object.assign(restHeaders(false), {Prefer:'return=minimal'}) });
   if(!delRes.ok) { const t=await delRes.text().catch(()=> ''); throw new Error('cloud_delete_'+delRes.status+(t?(':'+t.slice(0,120)):'')); }
   const payload = rows.map(r => ({ date:r.date, machine_type:r.type, dai:r.dai, bb:r.BB, rb:r.RB, games:r.G }));
