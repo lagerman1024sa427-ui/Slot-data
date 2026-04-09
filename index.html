@@ -3,6 +3,98 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>若宮スロット分析 v9.3</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#f8f9fa; --card:#ffffff; --line:#e5e7eb; --text:#111827; --muted:#6b7280;
+  --accent:#b8925b; --accent2:#8b6a3f; --green:#18a957; --red:#ef6b6b;
+  --shadow:0 8px 24px rgba(17,24,39,.08);
+}
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; }
+.wrap { max-width:980px; margin:0 auto; padding:20px 12px 100px; }
+.card { background:var(--card); border-radius:16px; border:1px solid var(--line); padding:20px; margin-bottom:16px; box-shadow:var(--shadow); }
+textarea { width:100%; height:160px; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:14px; margin-bottom:12px; }
+button { width:100%; padding:14px; border-radius:12px; border:none; font-weight:bold; cursor:pointer; font-size:15px; margin-bottom:8px; }
+.btn-primary { background:var(--accent); color:white; }
+.btn-save { background:var(--accent2); color:white; }
+table { width:100%; border-collapse:collapse; margin-top:16px; font-size:13px; }
+th, td { padding:12px 8px; border-bottom:1px solid var(--line); text-align:center; }
+.plus { color:var(--red); font-weight:bold; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>若宮スロット分析 データ更新</h2>
+    <input type="date" id="targetDate" style="width:100%; padding:12px; margin-bottom:12px; border:1px solid var(--line); border-radius:8px;">
+    <textarea id="rawInput" placeholder="データを貼り付け"></textarea>
+    <button class="btn-primary" onclick="handlePreview()">プレビュー</button>
+    <button class="btn-save" onclick="handleCloudSave()">Cloudへ保存</button>
+    <div id="displayArea"></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://lagerman1024sa427-ui.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // ここは自動的にあなたのキーが維持されます
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let records = [];
+
+function handlePreview() {
+  const val = document.getElementById('rawInput').value.trim();
+  if(!val) return;
+  const lines = val.split('\n');
+  let tableHtml = '<table><tr><th>台番</th><th>BB</th><th>RB</th><th>G</th><th>差枚</th></tr>';
+  records = [];
+
+  lines.forEach(line => {
+    const p = line.split(/\s+/);
+    if(p.length >= 4) {
+      const id = p[0], bb = parseInt(p[1])||0, rb = parseInt(p[2])||0, g = parseInt(p[3])||0;
+      const diff = (bb * 240 + rb * 90) - (g * 3);
+      const s = (diff > 0 ? "+" : "") + diff.toLocaleString();
+      records.push({ id, bb, rb, g, samai: s });
+      tableHtml += `<tr><td>${id}</td><td>${bb}</td><td>${rb}</td><td>${g}</td><td class="${diff>0?'plus':''}">${s}</td></tr>`;
+    }
+  });
+  document.getElementById('displayArea').innerHTML = tableHtml + '</table>';
+}
+
+async function handleCloudSave() {
+  const date = document.getElementById('targetDate').value;
+  if(!date) return alert("日付を選んでください");
+  if(!records.length) return alert("プレビューを先にしてください");
+
+  const dataToUpload = records.map(r => ({
+    date: date,
+    type: "ハナハナ",
+    machine_id: r.id,
+    bb: r.bb,
+    rb: r.rb,
+    g: r.g,
+    // 【重要】ここでエラーの原因である記号を確実に消しています
+    samai: parseInt(r.samai.toString().replace(/[+,]/g, '')) || 0
+  }));
+
+  const { error } = await client.from('slot_daily_records').upsert(dataToUpload, { onConflict: 'date,type,machine_id' });
+  
+  if (error) {
+    alert("保存失敗: " + error.message);
+  } else {
+    alert("保存成功しました！");
+  }
+}
+</script>
+</body>
+</html>
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <title>若宮スロット分析 v9</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
