@@ -7,17 +7,20 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
-  --bg:#f8f9fa; --card:#ffffff; --line:#e5e7eb; --text:#111827; --muted:#6b7280;
-  --accent:#b8925b; --accent2:#8b6a3f; --green:#18a957; --red:#ef6b6b;
-  --shadow:0 8px 24px rgba(17,24,39,.08);
+  --bg:#f3f4f6; --card:#ffffff; --line:#e5e7eb; --text:#111827; --muted:#6b7280;
+  --accent:#b8925b; --accent2:#8b6a3f; --soft:#f6f2eb; --green:#18a957; --red:#ef6b6b;
+  --greenSoft:#d9f7e5; --redSoft:#fde1e1; --graySoft:#f3f4f6; --shadow:0 8px 24px rgba(17,24,39,.08);
 }
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; }
-.wrap { max-width:980px; margin:0 auto; padding:20px 12px 100px; }
+html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif; }
+.header { position:sticky; top:0; background:rgba(255,255,255,.8); backdrop-filter:blur(10px); z-index:100; padding:10px 0; border-bottom:1px solid var(--line); }
+.tab-wrap { display:flex; gap:8px; overflow-x:auto; padding:0 12px; }
+.tab { padding:8px 16px; border-radius:20px; background:var(--graySoft); cursor:pointer; font-size:14px; white-space:nowrap; }
+.tab.active { background:var(--accent); color:white; }
 .card { background:var(--card); border-radius:16px; border:1px solid var(--line); padding:20px; margin-bottom:16px; box-shadow:var(--shadow); }
-textarea { width:100%; height:160px; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:14px; margin-bottom:12px; }
-button { width:100%; padding:14px; border-radius:12px; border:none; font-weight:bold; cursor:pointer; font-size:15px; margin-bottom:8px; }
-.btn-primary { background:var(--accent); color:white; }
+textarea { width:100%; height:160px; border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; }
+button { width:100%; padding:14px; border-radius:12px; border:none; font-weight:bold; cursor:pointer; font-size:15px; }
+.btn-primary { background:var(--accent); color:white; margin-bottom:8px; }
 .btn-save { background:var(--accent2); color:white; }
 table { width:100%; border-collapse:collapse; margin-top:16px; font-size:13px; }
 th, td { padding:12px 8px; border-bottom:1px solid var(--line); text-align:center; }
@@ -25,67 +28,90 @@ th, td { padding:12px 8px; border-bottom:1px solid var(--line); text-align:cente
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="card">
-    <h2>若宮スロット分析 データ更新</h2>
-    <input type="date" id="targetDate" style="width:100%; padding:12px; margin-bottom:12px; border:1px solid var(--line); border-radius:8px;">
-    <textarea id="rawInput" placeholder="データを貼り付け"></textarea>
-    <button class="btn-primary" onclick="handlePreview()">プレビュー</button>
-    <button class="btn-save" onclick="handleCloudSave()">Cloudへ保存</button>
-    <div id="displayArea"></div>
+<div class="header">
+  <div class="tab-wrap">
+    <div class="tab" id="t-cal" onclick="showTab('cal')">カレンダー</div>
+    <div class="tab" id="t-mat" onclick="showTab('mat')">マトリクス</div>
+    <div class="tab active" id="t-upd" onclick="showTab('upd')">更新</div>
+    <div class="tab" id="t-use" onclick="showTab('use')">使い方</div>
   </div>
 </div>
 
+<div class="wrap" style="padding:20px 12px 100px;">
+  <div id="tab-upd" class="tab-content">
+    <div class="card">
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button onclick="setType('ハナハナ')" id="b-hana" style="flex:1; background:#b8925b; color:white;">ハナハナ</button>
+        <button onclick="setType('ジャグラー')" id="b-jug" style="flex:1; background:var(--graySoft); color:var(--text);">ジャグラー</button>
+      </div>
+      <input type="date" id="inputDate" style="width:100%; padding:12px; border:1px solid var(--line); border-radius:8px; margin-bottom:12px;">
+      <textarea id="inputText" placeholder="データを貼り付け"></textarea>
+      <button class="btn-primary" onclick="doPreview()">プレビュー</button>
+      <button class="btn-save" onclick="doSave()">Cloudへ保存</button>
+      <div id="resArea"></div>
+    </div>
+  </div>
+  
+  <div id="tab-cal" class="tab-content" style="display:none;"><div class="card" id="calView"></div></div>
+  <div id="tab-mat" class="tab-content" style="display:none;"><div class="card" id="matView"></div></div>
+</div>
+
 <script>
-const SUPABASE_URL = 'https://lagerman1024sa427-ui.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // ここは自動的にあなたのキーが維持されます
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const S_URL = 'https://lagerman1024sa427-ui.supabase.co';
+const S_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // あなたのキーを維持
+const db = supabase.createClient(S_URL, S_KEY);
 
-let records = [];
+let currentType = 'ハナハナ';
+let previewData = [];
 
-function handlePreview() {
-  const val = document.getElementById('rawInput').value.trim();
-  if(!val) return;
-  const lines = val.split('\n');
-  let tableHtml = '<table><tr><th>台番</th><th>BB</th><th>RB</th><th>G</th><th>差枚</th></tr>';
-  records = [];
-
-  lines.forEach(line => {
-    const p = line.split(/\s+/);
-    if(p.length >= 4) {
-      const id = p[0], bb = parseInt(p[1])||0, rb = parseInt(p[2])||0, g = parseInt(p[3])||0;
-      const diff = (bb * 240 + rb * 90) - (g * 3);
-      const s = (diff > 0 ? "+" : "") + diff.toLocaleString();
-      records.push({ id, bb, rb, g, samai: s });
-      tableHtml += `<tr><td>${id}</td><td>${bb}</td><td>${rb}</td><td>${g}</td><td class="${diff>0?'plus':''}">${s}</td></tr>`;
-    }
-  });
-  document.getElementById('displayArea').innerHTML = tableHtml + '</table>';
+function showTab(t){
+  document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+  document.querySelectorAll('.tab').forEach(tab=>tab.classList.remove('active'));
+  document.getElementById('tab-'+t).style.display='block';
+  document.getElementById('t-'+t).classList.add('active');
 }
 
-async function handleCloudSave() {
-  const date = document.getElementById('targetDate').value;
-  if(!date) return alert("日付を選んでください");
-  if(!records.length) return alert("プレビューを先にしてください");
+function setType(t){
+  currentType = t;
+  document.getElementById('b-hana').style.background = (t==='ハナハナ'?'#b8925b':'var(--graySoft)');
+  document.getElementById('b-jug').style.background = (t==='ジャグラー'?'#b8925b':'var(--graySoft)');
+}
 
-  const dataToUpload = records.map(r => ({
-    date: date,
-    type: "ハナハナ",
-    machine_id: r.id,
-    bb: r.bb,
-    rb: r.rb,
-    g: r.g,
-    // 【重要】ここでエラーの原因である記号を確実に消しています
-    samai: parseInt(r.samai.toString().replace(/[+,]/g, '')) || 0
+function doPreview(){
+  const val = document.getElementById('inputText').value.trim();
+  const rows = val.split('\n');
+  let h = '<table><tr><th>台番</th><th>BB</th><th>RB</th><th>G</th><th>差枚</th></tr>';
+  previewData = [];
+  rows.forEach(r=>{
+    const p = r.split(/\s+/);
+    if(p.length>=4){
+      const diff = (parseInt(p[1])*240 + parseInt(p[2])*90) - (parseInt(p[3])*3);
+      const s = (diff>0?'+':'')+diff.toLocaleString();
+      previewData.push({id:p[0], bb:p[1], rb:p[2], g:p[3], samai:s});
+      h += `<tr><td>${p[0]}</td><td>${p[1]}</td><td>${p[2]}</td><td>${p[3]}</td><td class="${diff>0?'plus':''}">${s}</td></tr>`;
+    }
+  });
+  document.getElementById('resArea').innerHTML = h+'</table>';
+}
+
+async function doSave(){
+  const d = document.getElementById('inputDate').value;
+  if(!d || !previewData.length) return alert("日付とプレビューを確認してください");
+  
+  const upload = previewData.map(x=>({
+    date: d,
+    type: currentType,
+    machine_id: x.id,
+    bb: parseInt(x.bb),
+    rb: parseInt(x.rb),
+    g: parseInt(x.g),
+    // ここでエラーの原因「+」と「,」を確実に消して数字にします
+    samai: parseInt(x.samai.toString().replace(/[+,]/g, '')) || 0
   }));
 
-  const { error } = await client.from('slot_daily_records').upsert(dataToUpload, { onConflict: 'date,type,machine_id' });
-  
-  if (error) {
-    alert("保存失敗: " + error.message);
-  } else {
-    alert("保存成功しました！");
-  }
+  const { error } = await db.from('slot_daily_records').upsert(upload, { onConflict: 'date,type,machine_id' });
+  if(error) alert("保存失敗: " + error.message);
+  else alert("保存成功！");
 }
 </script>
 </body>
