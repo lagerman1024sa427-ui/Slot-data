@@ -378,7 +378,8 @@ async function fetchCloudRows() {
   return (data||[]).map(normalizeCloudRow);
 }
 async function replaceCloudRows(dateStr,type,rows) {
-  const delUrl = APP_CONFIG.supabaseUrl + '/rest/v1/slot_daily_records?date=eq.' + encodeURIComponent(dateStr) + '&machine_type=eq.' + encodeURIComponent(type);
+  const clean = v => parseInt(String(v).replace(/[+,]/g, '')) || 0;
+st delUrl = APP_CONFIG.supabaseUrl + '/rest/v1/slot_daily_records?date=eq.' + encodeURIComponent(dateStr) + '&machine_type=eq.' + encodeURIComponent(type);
   const delRes = await fetch(delUrl, { method:'DELETE', headers:Object.assign(restHeaders(false), {Prefer:'return=minimal'}) });
   if(!delRes.ok) { const t=await delRes.text().catch(()=> ''); throw new Error('cloud_delete_'+delRes.status+(t?(':'+t.slice(0,120)):'')); }
   const payload = rows.map(r => ({ date:r.date, machine_type:r.type, dai:r.dai, bb:r.BB, rb:r.RB, games:r.G }));
@@ -396,9 +397,9 @@ function parseDaily(text,dateStr,type) {
       const obj = {date:dateStr, type, dai, G:0, BB:0, RB:0};
       for(let k=0; k<7 && i<lines.length; k++,i++) {
         const p = lines[i].split(/	/); const key=p[0]; const val=(p[1]||'').trim();
-        if(key==='BIG') obj.BB = Number(val||0);
-        else if(key==='REG') obj.RB = Number(val||0);
-        else if(key==='累計ゲーム') obj.G = Number(val||0);
+        if(key==='BIG') obj.BB = clean(val);
+        else if(key==='REG') obj.RB = clean(val);
+        else if(key==='累計ゲーム') obj.G = clean(val);
       }
       out.push(enrich(obj));
     } else { i++; }
